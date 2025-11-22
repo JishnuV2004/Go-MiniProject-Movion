@@ -1,0 +1,68 @@
+<div class="bg-white p-6 rounded shadow">Loading users...</div>
+
+<script type="module">
+(async function loadUsers() {
+  const app = document.querySelector("#appContent");
+
+  try {
+    const res = await fetch(window.API + "/users", {
+      method: "GET",
+      headers: window.authHeaders(),
+      credentials: "include"
+    });
+
+    if (!res.ok) throw new Error("Unauthorized or Failed to load users");
+
+    const data = await res.json();
+    const users = data.users || [];
+
+    const rows = users.map(u => `
+      <tr class="border-t">
+        <td class="px-3 py-2">${u.ID}</td>
+        <td class="px-3 py-2">${u.username}</td>
+        <td class="px-3 py-2">${u.email}</td>
+        <td class="px-3 py-2">${u.role}</td>
+        <td class="px-3 py-2">
+          <button data-id="${u.ID}" class="del text-red-600">Delete</button>
+        </td>
+      </tr>
+    `).join("");
+
+    app.innerHTML = `
+      <div class="bg-white p-4 rounded shadow">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="font-semibold">Users</h2>
+        </div>
+
+        <table class="w-full">
+          <thead>
+            <tr class="text-left text-slate-500">
+              <th class="px-3 py-2">ID</th>
+              <th class="px-3 py-2">Username</th>
+              <th class="px-3 py-2">Email</th>
+              <th class="px-3 py-2">Role</th>
+              <th class="px-3 py-2">Actions</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    `;
+
+    // delete handler
+    document.querySelectorAll(".del").forEach(btn =>
+      btn.addEventListener("click", async (e) => {
+        const id = e.target.dataset.id;
+        await fetch(window.API + "/delete/" + id, {
+          method: "POST",
+          headers: window.authHeaders(),
+        });
+        location.hash = "#/users"; // reload
+      })
+    );
+
+  } catch (err) {
+    app.innerHTML = `<div class="p-4 text-red-600 bg-white rounded">${err.message}</div>`;
+  }
+})();
+</script>

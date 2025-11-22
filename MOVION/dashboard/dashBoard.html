@@ -1,0 +1,624 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Admin Dashboard — Movie Booking (API)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    .sidebar-scroll {
+      max-height: calc(100vh - 4rem);
+      overflow: auto
+    }
+  </style>
+</head>
+
+<body class="bg-slate-50 text-slate-800">
+  <div class="min-h-screen flex">
+    <!-- Sidebar -->
+    <aside class="w-72 bg-white border-r shadow-sm">
+      <div class="p-4 border-b flex items-center gap-3">
+        <div
+          class="h-10 w-10 bg-gradient-to-tr from-indigo-500 to-purple-500 rounded flex items-center justify-center text-white font-bold">
+          MB</div>
+        <div>
+          <div class="font-semibold">Movion Admin</div>
+          <div class="text-xs text-slate-500">Administrator</div>
+        </div>
+      </div>
+      <nav class="p-4 space-y-1 sidebar-scroll">
+        <a href="#/" class="route block px-3 py-2 rounded hover:bg-slate-100" data-route="/">Dashboard</a>
+        <a href="#/screens" class="route block px-3 py-2 rounded hover:bg-slate-100" data-route="/screens">Screens</a>
+        <a href="#/movies" class="route block px-3 py-2 rounded hover:bg-slate-100" data-route="/movies">Movies</a>
+        <a href="#/users" class="route block px-3 py-2 rounded hover:bg-slate-100" data-route="/users">Users</a>
+        <div class="border-t my-3"></div>
+        <button id="logoutBtn" class="w-full text-left px-3 py-2 rounded hover:bg-red-50 text-red-600">Logout</button>
+      </nav>
+    </aside>
+
+    <!-- Main -->
+    <main class="flex-1 p-6">
+      <header class="flex items-center justify-between mb-6">
+        <h1 id="pageTitle" class="text-2xl font-semibold">Dashboard</h1>
+        <div class="flex items-center gap-3">
+          <div class="text-sm text-slate-500">Welcome, Admin</div>
+          <div class="h-9 w-9 rounded-full bg-slate-200 flex items-center justify-center">A</div>
+        </div>
+      </header>
+
+      <div id="appContent"></div>
+    </main>
+  </div>
+
+  <!-- Modals container -->
+  <div id="modals"></div>
+
+  <script>
+    // ---------- CONFIG ----------
+    const API = 'http://localhost:8080/admin'; // change if your API base differs
+
+    // Hold last fetched arrays here so buttons can access them safely
+    let lastScreens = [];
+    let lastMovies = [];
+    let lastUsers = [];
+
+    // Utility: get auth headers if token present
+    localStorage.setItem("token", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJlbWFpbCI6Im5pY2tAZ21haWwuY29tIiwicm9sZSI6ImFkbWluIiwiQmxvY2siOmZhbHNlLCJleHAiOjE3NjM1NDg3ODF9.e5DRMJ2LRhtLD3g5Fl5ScDcmNr0ZCa5ipha2qohX5vk");
+    function authHeaders() {
+      const token = localStorage.getItem('token');
+      const headers = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = 'Bearer ' + token;
+      return headers;
+    }
+
+    // ---------- ROUTER ----------
+    function router() {
+      const hash = location.hash.replace('#', '') || '/';
+      const route = hash.split('?')[0];
+
+      document.querySelectorAll('.route').forEach(el => el.classList.remove('bg-slate-100', 'font-medium'));
+      document.querySelectorAll(`.route[data-route='${route}']`).forEach(el => el.classList.add('bg-slate-100', 'font-medium'));
+
+      document.getElementById('pageTitle').innerText = route === '/' ? 'Dashboard' : route.slice(1).charAt(0).toUpperCase() + route.slice(2);
+
+      if (route === '/') renderDashboard();
+      else if (route === '/screens') renderScreens();
+      else if (route === '/movies') renderMovies();
+      else if (route === '/users') renderUsers();
+    }
+
+    window.addEventListener('hashchange', router);
+    document.addEventListener('DOMContentLoaded', () => { router(); attachLogout(); });
+
+    // ---------- MODAL HELPERS ----------
+    function openModal(html) { document.getElementById('modals').innerHTML = html; }
+    function closeModal() { document.getElementById('modals').innerHTML = ''; }
+
+    // ---------- DASHBOARD (revenue) ----------
+    async function renderDashboard() {
+      const app = document.getElementById('appContent');
+      app.innerHTML = `<div class="bg-white p-6 rounded shadow">Loading...</div>`;
+
+      try {
+        const res = await fetch(`${API}/dashboard/revenue`, { headers: authHeaders() });
+        if (!res.ok) throw new Error('Failed to fetch revenue');
+        const data = await res.json();
+
+        app.innerHTML = `
+        <section class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+          <div class="col-span-2 bg-white p-4 rounded-lg shadow-sm">
+            <div class="flex items-center justify-between mb-4">
+              <h2 class="font-semibold">Revenue overview</h2>
+              <div class="text-sm text-slate-500">Last ${data.days?.length || 12} days</div>
+            </div>
+            <canvas id="lineChart" class="w-full" height="140"></canvas>
+          </div>
+
+          <div class="bg-white p-4 rounded-lg shadow-sm">
+            <h3 class="font-semibold mb-3">Key stats</h3>
+            <div class="space-y-3">
+              <div class="text-lg font-semibold">Total: ₹${data.total ?? 0}</div>
+              <div>Today: ₹${data.today ?? 0}</div>
+              <div>This month: ₹${data.month ?? 0}</div>
+            </div>
+          </div>
+        </section>
+      `;
+
+        // render chart
+        const labels = data.days || Array.from({ length: 12 }, (_, i) => `D${i + 1}`);
+        const values = data.values || (Array.from({ length: labels.length }, () => Math.floor(Math.random() * 500) + 200));
+        const ctx = document.getElementById('lineChart').getContext('2d');
+        new Chart(ctx, {
+          type: 'line',
+          data: { labels, datasets: [{ label: 'Revenue', data: values, tension: 0.3, borderColor: 'rgb(99,102,241)', fill: false }] },
+          options: { responsive: true }
+        });
+
+      } catch (err) {
+        document.getElementById('appContent').innerHTML = `<div class="bg-white p-6 rounded shadow text-red-600">Error loading dashboard: ${err.message}</div>`;
+      }
+    }
+
+    // ---------- SCREENS CRUD ----------
+    async function renderScreens() {
+      const app = document.getElementById('appContent');
+      app.innerHTML = `<div class="bg-white p-6 rounded shadow">Loading screens...</div>`;
+
+      try {
+        const res = await fetch(`${API}/getscreens`, { headers: authHeaders() });
+        if (!res.ok) throw new Error('Failed to fetch screens');
+        const data = await res.json();
+        const screens = data.screens
+        // console.log(screens)
+        lastScreens = screens;
+
+        const rows = screens.map(s => `
+        <tr class="border-t">
+          <td class="px-4 py-3">${s.ID}</td>
+          <td class="px-4 py-3">${escapeHtml(s.name)}</td>
+          <td class="px-4 py-3">${s.totalseats ?? s.seats ?? 0}</td>
+          <td class="px-4 py-3">
+            <button data-id="${s.ID}" class="edit-screen text-indigo-600 mr-2">Edit</button>
+            <button data-id="${s.ID}" class="del-screen text-red-600">Delete</button>
+          </td>
+        </tr>`).join('');
+
+        app.innerHTML = `
+        <div class="bg-white p-4 rounded-lg shadow-sm">
+          <div class="flex items-center justify-between mb-4">
+            <h2 class="font-semibold">All Screens</h2>
+            <button id="addScreenBtn" class="px-3 py-1 bg-indigo-600 text-white rounded">Add Screen</button>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left">
+              <thead class="text-slate-500 text-sm">
+                <tr><th class="px-4 py-2">ID</th><th class="px-4 py-2">Name</th><th class="px-4 py-2">Seats</th><th class="px-4 py-2">Actions</th></tr>
+              </thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
+        </div>
+      `;
+
+        // wire buttons
+        document.getElementById('addScreenBtn').addEventListener('click', () => openScreenModal(null));
+        document.querySelectorAll('.edit-screen').forEach(btn => {
+          btn.addEventListener('click', e => {
+            const id = Number(e.currentTarget.dataset.id);
+            const item = lastScreens.find(x => x.ID === id);
+            openScreenModal(item || null);
+          });
+        });
+        document.querySelectorAll('.del-screen').forEach(btn => {
+          btn.addEventListener('click', e => {
+            const id = Number(e.currentTarget.dataset.id);
+            deleteScreen(id);
+          });
+        });
+
+      } catch (err) {
+        app.innerHTML = `<div class="bg-white p-6 rounded shadow text-red-600">Error: ${err.message}</div>`;
+      }
+    }
+
+    function openScreenModal(item) {
+      const isEdit = !!item;
+      window.currentScreen = item || null;
+
+      openModal(`
+    <div class="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+        <div class="bg-white p-6 rounded shadow-lg w-11/12 max-w-lg">
+
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-xl font-semibold">${isEdit ? "Edit Screen" : "Add Screen"}</h3>
+                <button onclick="closeModal()" class="text-slate-500 text-xl">×</button>
+            </div>
+
+            <div class="space-y-3">
+                <label class="block text-sm font-medium">
+                    Screen Name
+                    <input id="scr_name" class="mt-1 p-2 w-full border rounded"
+                        value="${isEdit ? item.name : ""}">
+                </label>
+
+                <label class="block text-sm font-medium">
+                    Total Seats
+                    <input id="scr_seats" type="number" class="mt-1 p-2 w-full border rounded"
+                        value="${isEdit ? item.totalseats : 100}">
+                </label>
+
+                <label class="block text-sm font-medium">
+                    Rows
+                    <input id="scr_rows" type="number" class="mt-1 p-2 w-full border rounded"
+                        value="${isEdit ? (item.rows ?? 10) : 10}">
+                </label>
+
+                <label class="block text-sm font-medium">
+                    Columns
+                    <input id="scr_cols" type="number" class="mt-1 p-2 w-full border rounded"
+                        value="${isEdit ? (item.cols ?? 10) : 10}">
+                </label>
+            </div>
+
+            <div class="flex justify-end gap-3 mt-5">
+                <button onclick="closeModal()" class="px-3 py-1 border rounded">Cancel</button>
+                <button id="saveScreenBtn"
+                    class="px-3 py-1 bg-indigo-600 text-white rounded">${isEdit ? "Update" : "Create"}</button>
+            </div>
+
+        </div>
+    </div>
+    `);
+
+      document.getElementById("saveScreenBtn").addEventListener("click", saveScreen);
+    }
+
+
+
+    async function saveScreen() {
+      const name = document.getElementById("scr_name").value.trim();
+      const totalSeats = Number(document.getElementById("scr_seats").value);
+      const rows = Number(document.getElementById("scr_rows").value);
+      const cols = Number(document.getElementById("scr_cols").value);
+
+      if (!name) return alert("Screen name required");
+      if (totalSeats <= 0) return alert("Invalid total seats");
+      if (rows <= 0 || cols <= 0) return alert("Rows & Columns must be >= 1");
+
+      const payload = { name, totalseats: totalSeats };
+
+      try {
+        if (currentScreen && currentScreen.ID) {
+          // EDIT
+          await fetch(`${API}/editscreen/${currentScreen.ID}?row=${rows}&col=${cols}`, {
+            method: "POST",
+            headers: authHeaders(),
+            body: JSON.stringify(payload)
+          });
+
+        } else {
+          // CREATE
+          await fetch(`${API}/screen?row=${rows}&col=${cols}`, {
+            method: "POST",
+            headers: authHeaders(),
+            body: JSON.stringify(payload)
+          });
+        }
+
+        closeModal();
+        renderScreens();
+
+      } catch (err) {
+        alert("Failed: " + err.message);
+      }
+    }
+
+
+
+    async function deleteScreen(id) {
+      if (!confirm('Delete this screen?')) return;
+      try {
+        await fetch(`${API}/deletescreen/${id}`, { method: 'POST', headers: authHeaders() });
+        renderScreens();
+      } catch (err) {
+        alert('Delete failed: ' + err.message);
+      }
+    }
+
+    // ---------- MOVIES CRUD ----------
+    async function renderMovies() {
+      const app = document.getElementById('appContent');
+      app.innerHTML = `<div class="bg-white p-6 rounded shadow">Loading movies...</div>`;
+
+      try {
+        const res = await fetch(`${API}/allmovies`, { method: "GET", headers: authHeaders() });
+        if (!res.ok) throw new Error('Failed to fetch movies');
+        const data = await res.json();
+        const movies = data.movies || data;
+        // console.log(movies)
+        lastMovies = movies;
+
+        const rows = movies.map(m => `
+        <tr class="border-t">
+          <td class="px-4 py-3">${m.ID}</td>
+          <td class="px-4 py-3">${escapeHtml(m.title)}</td>
+          <td class="px-4 py-3">${m.language ?? m.lang ?? ''}</td>
+          <td class="px-4 py-3">${m.duration_min ?? m.duration ?? ''}</td>
+          <td class="px-4 py-3">
+            <button data-id="${m.ID}" class="edit-movie text-indigo-600 mr-2">Edit</button>
+            <button data-id="${m.ID}" class="del-movie text-red-600">Delete</button>
+          </td>
+        </tr>`).join('');
+
+        app.innerHTML = `
+        <div class="bg-white p-4 rounded-lg shadow-sm">
+          <div class="flex items-center justify-between mb-4">
+            <h2 class="font-semibold">All Movies</h2>
+            <button id="addMovieBtn" class="px-3 py-1 bg-indigo-600 text-white rounded">Add Movie</button>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left">
+              <thead class="text-slate-500 text-sm"><tr><th class="px-4 py-2">ID</th><th class="px-4 py-2">Title</th><th class="px-4 py-2">Lang</th><th class="px-4 py-2">Duration</th><th class="px-4 py-2">Actions</th></tr></thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
+        </div>
+      `;
+
+        document.getElementById('addMovieBtn').addEventListener('click', () => openMovieModal(null));
+        document.querySelectorAll('.edit-movie').forEach(btn => {
+          btn.addEventListener('click', e => {
+            const id = Number(e.currentTarget.dataset.id);
+            const item = lastMovies.find(x => x.ID === id);
+            // console.log(item)
+            openMovieModal(item || null);
+          });
+        });
+        document.querySelectorAll('.del-movie').forEach(btn => {
+          btn.addEventListener('click', e => {
+            const id = Number(e.currentTarget.dataset.id);
+            deleteMovie(id);
+          });
+        });
+
+      } catch (err) {
+        app.innerHTML = `<div class="bg-white p-6 rounded shadow text-red-600">Error: ${err.message}</div>`;
+      }
+    }
+
+    function openMovieModal(item) {
+      const isEdit = !!item;
+      window.currentMovie = item || null;
+      openModal(`
+      <div class="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+        <div class="bg-white p-6 rounded shadow-lg w-11/12 max-w-lg">
+          <div class="flex justify-between items-center mb-4">
+            <h3 class="font-semibold">${isEdit ? 'Edit' : 'Add'} Movie</h3>
+            <button onclick="closeModal()" class="text-slate-500">✕</button>
+          </div>
+          <div class="space-y-3">
+            <label class="block text-sm">Title
+              <input id="mov_title" class="mt-1 p-2 w-full border rounded" value="${isEdit ? escapeHtml(item.title) : ''}" />
+            </label>
+            <label class="block text-sm">Language
+              <input id="mov_lang" class="mt-1 p-2 w-full border rounded" value="${isEdit ? (item.language ?? item.lang ?? 'EN') : 'EN'}" />
+            </label>
+            <label class="block text-sm">Duration (min)
+              <input id="mov_dur" type="number" class="mt-1 p-2 w-full border rounded" value="${isEdit ? (item.duration_min ?? item.duration ?? 120) : 120}" />
+            </label>
+          </div>
+          <div class="flex justify-end gap-3 mt-4">
+            <button class="px-3 py-1 border rounded" onclick="closeModal()">Cancel</button>
+            <button class="px-3 py-1 bg-indigo-600 text-white rounded" id="saveMovieBtn">${isEdit ? 'Update' : 'Create'}</button>
+          </div>
+        </div>
+      </div>
+    `);
+
+      document.getElementById('saveMovieBtn').addEventListener('click', async () => {
+        const title = document.getElementById('mov_title').value.trim();
+        const lang = document.getElementById('mov_lang').value.trim();
+        const duration = Number(document.getElementById('mov_dur').value);
+        if (!title) return alert('Title required');
+
+        const payload = { title, language: lang, duration_min: duration };
+        try {
+          if (isEdit && currentMovie && currentMovie.ID) {
+            await fetch(`${API}/editmovie/${currentMovie.ID}`, { method: 'POST', headers: authHeaders(), body: JSON.stringify(payload) });
+          } else {
+            await fetch(`${API}/movie`, { method: 'POST', headers: authHeaders(), body: JSON.stringify(payload) });
+          }
+          closeModal();
+          renderMovies();
+        } catch (err) {
+          alert('Error saving movie: ' + err.message);
+        }
+      });
+    }
+
+    async function deleteMovie(id) {
+      if (!confirm('Delete this movie?')) return;
+      try {
+        await fetch(`${API}/deletemovie/${id}`, { method: 'POST', headers: authHeaders() });
+        renderMovies();
+      } catch (err) {
+        alert('Delete failed: ' + err.message);
+      }
+    }
+
+    // ---------- USERS CRUD (+ block/unblock) ----------
+    async function renderUsers() {
+      const app = document.getElementById('appContent');
+      app.innerHTML = `<div class="bg-white p-6 rounded shadow">Loading users...</div>`;
+
+      try {
+        const res = await fetch(`${API}/users`, { method: "GET", headers: authHeaders() });
+        if (!res.ok) throw new Error('Failed to fetch users');
+        const data = await res.json();
+
+        const users = data.users
+        // console.log(users);
+        lastUsers = users;
+
+        const rows = users.map(u => `
+        <tr class="border-t">
+          <td class="px-4 py-3">${u.ID}</td>
+          <td class="px-4 py-3">${escapeHtml(u.username)}</td>
+          <td class="px-4 py-3">${escapeHtml(u.email)}</td>
+          <td class="px-4 py-3">${escapeHtml(u.role ?? '')}</td>
+          <td class="px-4 py-3">
+            <button data-id="${u.ID}" class="edit-user text-indigo-600 mr-2">Edit</button>
+            <button data-id="${u.ID}" class="del-user text-red-600 mr-2">Delete</button>
+            ${u.is_blocked
+            ? `<button class="unblock-user text-green-600" data-id="${u.ID}">Unblock</button>`
+            : `<button class="block-user text-red-600" data-id="${u.ID}">Block</button>`
+          }
+          </td>
+        </tr>
+      `).join('');
+
+        app.innerHTML = `
+        <div class="bg-white p-4 rounded-lg shadow-sm">
+          <div class="flex items-center justify-between mb-4">
+            <h2 class="font-semibold">All Users</h2>
+            <button id="addUserBtn" class="px-3 py-1 bg-indigo-600 text-white rounded">Add User</button>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left">
+              <thead class="text-slate-500 text-sm"><tr><th class="px-4 py-2">ID</th><th class="px-4 py-2">Name</th><th class="px-4 py-2">Email</th><th class="px-4 py-2">Role</th><th class="px-4 py-2">Actions</th></tr></thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
+        </div>
+      `;
+
+        // wire buttons
+        document.getElementById('addUserBtn').addEventListener('click', () => openUserModal(null));
+        document.querySelectorAll('.edit-user').forEach(btn => {
+          btn.addEventListener('click', e => {
+            const id = Number(e.currentTarget.dataset.id);
+            const item = lastUsers.find(x => x.ID === id);
+            openUserModal(item || null);
+          });
+        });
+        document.querySelectorAll('.del-user').forEach(btn => {
+          btn.addEventListener('click', e => {
+            const id = Number(e.currentTarget.dataset.id);
+            deleteUser(id);
+          });
+        });
+        document.querySelectorAll('.block-user').forEach(btn => {
+          btn.addEventListener('click', e => {
+            const id = Number(e.currentTarget.dataset.id); blockUnblockUser(id, true);
+          });
+        });
+        document.querySelectorAll('.unblock-user').forEach(btn => {
+          btn.addEventListener('click', e => {
+            const id = Number(e.currentTarget.dataset.id); blockUnblockUser(id, false);
+          });
+        });
+
+      } catch (err) {
+        app.innerHTML = `<div class="bg-white p-6 rounded shadow text-red-600">Error: ${err.message}</div>`;
+      }
+    }
+
+    function openUserModal(item) {
+      const isEdit = !!item;
+      window.currentUser = item || null;
+      openModal(`
+      <div class="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+        <div class="bg-white p-6 rounded shadow-lg w-11/12 max-w-lg">
+          <div class="flex justify-between items-center mb-4">
+            <h3 class="font-semibold">${isEdit ? 'Edit' : 'Add'} User</h3>
+            <button onclick="closeModal()" class="text-slate-500">✕</button>
+          </div>
+          <div class="space-y-3">
+            <label class="block text-sm">Name
+              <input id="usr_name" class="mt-1 p-2 w-full border rounded" value="${isEdit ? escapeHtml(item.name) : ''}" />
+            </label>
+            <label class="block text-sm">Email
+              <input id="usr_email" type="email" class="mt-1 p-2 w-full border rounded" value="${isEdit ? escapeHtml(item.email) : ''}" />
+            </label>
+            <label class="block text-sm">Role
+              <select id="usr_role" class="mt-1 p-2 w-full border rounded">
+                <option value="user">User</option><option value="manager">Manager</option><option value="admin">Admin</option>
+              </select>
+            </label>
+          </div>
+          <div class="flex justify-end gap-3 mt-4">
+            <button class="px-3 py-1 border rounded" onclick="closeModal()">Cancel</button>
+            <button class="px-3 py-1 bg-indigo-600 text-white rounded" id="saveUserBtn">${isEdit ? 'Update' : 'Create'}</button>
+          </div>
+        </div>
+      </div>
+    `);
+
+      // set role after modal exists
+      setTimeout(() => { if (item) document.getElementById('usr_role').value = item.role || 'user'; }, 0);
+
+      document.getElementById('saveUserBtn').addEventListener('click', async () => {
+        const name = document.getElementById('usr_name').value.trim();
+        const email = document.getElementById('usr_email').value.trim();
+        const role = document.getElementById('usr_role').value;
+        if (!name || !email) return alert('Name and email are required');
+
+        const payload = { "Username": name, email, role };
+        try {
+          if (isEdit && currentUser && currentUser.ID) {
+            await fetch(`${API}/edit/${currentUser.ID}`, { method: 'POST', headers: authHeaders(), body: JSON.stringify(payload) });
+          } else {
+            await fetch(`${API}/create`, { method: 'POST', headers: authHeaders(), body: JSON.stringify(payload) });
+          }
+          closeModal();
+          renderUsers();
+        } catch (err) {
+          alert('Error saving user: ' + err.message);
+        }
+      });
+    }
+
+    async function deleteUser(id) {
+      if (!confirm('Delete this user?')) return;
+      try {
+        await fetch(`${API}/delete/${id}`, { method: 'POST', headers: authHeaders() });
+        renderUsers();
+      } catch (err) {
+        alert('Delete failed: ' + err.message);
+      }
+    }
+
+    async function blockUnblockUser(id, isBlocked) {
+      // isBlocked = true  → block user
+      // isBlocked = false → unblock user
+
+      try {
+        const res = await fetch(`${API}/block/${id}/block?block=${isBlocked}`, {
+          method: "POST",
+          headers: authHeaders(),
+          body: JSON.stringify({ is_blocked: isBlocked })
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          return alert(data.error || "Failed to update user status");
+        }
+
+        alert(isBlocked ? "User blocked" : "User unblocked");
+        renderUsers();
+      } catch (err) {
+        alert("Request failed: " + err.message);
+      }
+    }
+
+    // ---------- Logout (demo) ----------
+    function attachLogout() {
+      document.getElementById('logoutBtn').addEventListener('click', () => {
+        // if you use auth tokens, remove them here
+        localStorage.removeItem('token');
+        alert('Logged out (token cleared if present).');
+        location.href = '#/';
+        router();
+      });
+    }
+
+    // ---------- Small helpers ----------
+    // Escape text for safe insertion into HTML
+    function escapeHtml(str) {
+      if (str === undefined || str === null) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+  </script>
+</body>
+
+</html>

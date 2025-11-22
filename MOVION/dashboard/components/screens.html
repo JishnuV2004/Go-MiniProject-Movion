@@ -1,0 +1,88 @@
+<div class="bg-white p-6 rounded shadow">Loading screens...</div>
+
+<script>
+(async function loadScreens() {
+  const app = document.querySelector("#appContent");
+
+  try {
+    const res = await fetch(`${API}/getscreens`, { headers: authHeaders() });
+    const data = await res.json();
+    const screens = data.screens;
+
+    const rows = screens.map(s => `
+      <tr class="border-t">
+        <td class="px-3 py-2">${s.ID}</td>
+        <td class="px-3 py-2">${s.name}</td>
+        <td class="px-3 py-2">${s.totalseats}</td>
+        <td class="px-3 py-2">
+          <button class="edit-screen text-indigo-600" data-id="${s.ID}">Edit</button>
+          <button class="delete-screen text-red-600 ml-2" data-id="${s.ID}">Delete</button>
+        </td>
+      </tr>
+    `).join("");
+
+    app.innerHTML = `
+      <div class="bg-white p-4 rounded shadow">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="font-semibold">Screens</h2>
+          <button id="addScreenBtn" class="bg-indigo-600 text-white px-3 py-1 rounded">Add Screen</button>
+        </div>
+        <table class="w-full">
+          <thead>
+            <tr class="text-left text-slate-500">
+              <th class="px-3 py-2">ID</th>
+              <th class="px-3 py-2">Name</th>
+              <th class="px-3 py-2">Seats</th>
+              <th class="px-3 py-2">Actions</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    `;
+
+    document.querySelectorAll(".edit-screen").forEach(btn =>
+      btn.addEventListener("click", e => openEditScreen(e.target.dataset.id))
+    );
+
+    document.querySelectorAll(".delete-screen").forEach(btn =>
+      btn.addEventListener("click", e => deleteScreen(e.target.dataset.id))
+    );
+
+    document.getElementById("addScreenBtn").addEventListener("click", () => openAddScreen());
+
+  } catch (err) {
+    app.innerHTML = `<div class="p-4 text-red-600 bg-white rounded">Error: ${err.message}</div>`;
+  }
+})();
+
+// Add screen modal
+function openAddScreen() {
+  openModal(`
+    <div class="modal-bg">
+      <div class="modal-box">
+        <h3>Add Screen</h3>
+        <input id="name" placeholder="Screen Name" class="inp" />
+        <input id="seats" type="number" placeholder="Total Seats" class="inp" />
+        <button onclick="saveScreen()" class="btn">Save</button>
+      </div>
+    </div>
+  `);
+}
+
+async function saveScreen() {
+  const payload = {
+    name: document.getElementById("name").value,
+    totalseats: Number(document.getElementById("seats").value)
+  };
+
+  await fetch(`${API}/screen`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify(payload)
+  });
+
+  closeModal();
+  location.hash = "#/screens";
+}
+</script>

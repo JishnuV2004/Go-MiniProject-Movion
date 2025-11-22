@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Movion Admin Dashboard</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <style>
+    .sidebar-scroll { max-height: calc(100vh - 4rem); overflow-y: auto; }
+  </style>
+</head>
+
+<body class="bg-slate-50 text-slate-800">
+<div class="min-h-screen flex">
+
+  <!-- Sidebar -->
+  <aside class="w-72 bg-white border-r shadow-sm">
+    <div class="p-4 border-b flex items-center gap-3">
+      <div class="h-10 w-10 bg-gradient-to-tr from-indigo-500 to-purple-500 rounded flex items-center justify-center text-white font-bold">MB</div>
+      <div>
+        <div class="font-semibold">Movion Admin</div>
+        <div class="text-xs text-slate-500">Administrator</div>
+      </div>
+    </div>
+
+    <nav class="p-4 space-y-1 sidebar-scroll">
+      <a href="#/"        class="route block px-3 py-2 rounded hover:bg-slate-100" data-route="/">Dashboard</a>
+      <a href="#/screens" class="route block px-3 py-2 rounded hover:bg-slate-100" data-route="/screens">Screens</a>
+      <a href="#/movies"  class="route block px-3 py-2 rounded hover:bg-slate-100" data-route="/movies">Movies</a>
+      <a href="#/users"   class="route block px-3 py-2 rounded hover:bg-slate-100" data-route="/users">Users</a>
+
+      <div class="border-t my-3"></div>
+
+      <button id="logoutBtn"
+              class="w-full text-left px-3 py-2 rounded hover:bg-red-50 text-red-600">
+        Logout
+      </button>
+    </nav>
+  </aside>
+
+  <!-- Main Page -->
+  <main class="flex-1 p-6">
+    <header class="flex items-center justify-between mb-6">
+      <h1 id="pageTitle" class="text-2xl font-semibold">Dashboard</h1>
+    </header>
+
+    <div id="appContent"></div>
+  </main>
+
+</div>
+
+<!-- Modal -->
+<div id="modals"></div>
+
+<script>
+// ======================= CONFIG =====================
+const API = "http://localhost:8080/admin";
+
+// Token MUST exist
+console.log("JWT Token:", localStorage.getItem("token"));
+
+// Auth header builder
+function authHeaders() {
+  const token = localStorage.getItem("token");
+  const headers = { "Content-Type": "application/json" };
+  if (token) headers["Authorization"] = "Bearer " + token;
+  return headers;
+}
+
+// Export globals to components
+window.API = API;
+window.authHeaders = authHeaders;
+window.openModal = openModal;
+window.closeModal = closeModal;
+
+
+// ======================= COMPONENT LOADER =====================
+async function loadComponent(route) {
+  const map = {
+    "/":        "components/dash.html",
+    "/screens": "components/screens.html",
+    "/movies":  "components/movies.html",
+    "/users":   "components/users.html",
+  };
+
+  const file = map[route];
+  const app = document.getElementById("appContent");
+
+  if (!file) {
+    app.innerHTML = "<div class='p-4 bg-white rounded'>Page Not Found</div>";
+    return;
+  }
+
+  const html = await fetch(file).then(r => r.text());
+
+  app.innerHTML = html;
+
+  // Execute component scripts
+  const scripts = app.querySelectorAll("script");
+
+  scripts.forEach(old => {
+    const s = document.createElement("script");
+    s.type = "module";
+
+    if (old.src) s.src = old.src;
+    else s.textContent = old.textContent;
+
+    document.body.appendChild(s);
+    old.remove();
+  });
+}
+
+
+// ======================= ROUTER =====================
+async function router() {
+  const hash = location.hash.replace("#", "") || "/";
+  const route = hash.split("?")[0];
+
+  document.querySelectorAll(".route")
+    .forEach(a => a.classList.remove("bg-slate-100"));
+
+  document.querySelectorAll(`.route[data-route='${route}']`)
+    .forEach(a => a.classList.add("bg-slate-100"));
+
+  document.getElementById("pageTitle").innerText =
+    route === "/" ? "Dashboard" : route.slice(1).toUpperCase();
+
+  await loadComponent(route);
+}
+
+window.addEventListener("hashchange", router);
+document.addEventListener("DOMContentLoaded", () => {
+  router();
+  attachLogout();
+});
+
+
+// ======================= MODAL =====================
+function openModal(html) {
+  document.getElementById("modals").innerHTML = html;
+}
+function closeModal() {
+  document.getElementById("modals").innerHTML = "";
+}
+
+// ======================= LOGOUT =====================
+function attachLogout() {
+  document.getElementById("logoutBtn").addEventListener("click", () => {
+    localStorage.removeItem("token");
+    alert("Logged out!");
+
+    location.hash = "#/";
+    router();
+  });
+}
+</script>
+</body>
+</html>

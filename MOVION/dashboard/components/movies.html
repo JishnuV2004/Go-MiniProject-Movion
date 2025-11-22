@@ -1,0 +1,92 @@
+<div class="bg-white p-6 rounded shadow">Loading movies...</div>
+
+<script>
+(async function loadMovies() {
+  const app = document.querySelector("#appContent");
+
+  try {
+    const res = await fetch(`${API}/allmovies`, { headers: authHeaders() });
+    const data = await res.json();
+    const movies = data.movies;
+
+    const rows = movies.map(m => `
+      <tr class="border-t">
+        <td class="px-3 py-2">${m.ID}</td>
+        <td class="px-3 py-2">${m.title}</td>
+        <td class="px-3 py-2">${m.language}</td>
+        <td class="px-3 py-2">${m.duration_min}</td>
+        <td class="px-3 py-2">
+          <button class="edit-movie text-indigo-600" data-id="${m.ID}">Edit</button>
+          <button class="delete-movie text-red-600 ml-2" data-id="${m.ID}">Delete</button>
+        </td>
+      </tr>
+    `).join("");
+
+    app.innerHTML = `
+      <div class="bg-white p-4 rounded shadow">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="font-semibold">Movies</h2>
+          <button id="addMovieBtn" class="bg-indigo-600 text-white px-3 py-1 rounded">Add Movie</button>
+        </div>
+        <table class="w-full">
+          <thead>
+            <tr class="text-left text-slate-500">
+              <th class="px-3 py-2">ID</th>
+              <th class="px-3 py-2">Title</th>
+              <th class="px-3 py-2">Language</th>
+              <th class="px-3 py-2">Duration</th>
+              <th class="px-3 py-2">Actions</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    `;
+
+    document.getElementById("addMovieBtn").addEventListener("click", () => openAddMovie());
+
+    document.querySelectorAll(".edit-movie").forEach(btn =>
+      btn.addEventListener("click", e => openEditMovie(e.target.dataset.id))
+    );
+
+    document.querySelectorAll(".delete-movie").forEach(btn =>
+      btn.addEventListener("click", e => deleteMovie(e.target.dataset.id))
+    );
+
+  } catch (err) {
+    app.innerHTML = `<div class="p-4 text-red-600 bg-white rounded">Error: ${err.message}</div>`;
+  }
+})();
+
+// Add movie modal
+function openAddMovie() {
+  openModal(`
+    <div class="modal-bg">
+      <div class="modal-box">
+        <h3>Add Movie</h3>
+        <input id="title" class="inp" placeholder="Title" />
+        <input id="lang" class="inp" placeholder="Language" />
+        <input id="dur" class="inp" type="number" placeholder="Duration" />
+        <button onclick="saveMovie()" class="btn">Save</button>
+      </div>
+    </div>
+  `);
+}
+
+async function saveMovie() {
+  const payload = {
+    title: document.getElementById("title").value,
+    language: document.getElementById("lang").value,
+    duration_min: Number(document.getElementById("dur").value)
+  };
+
+  await fetch(`${API}/movie`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify(payload)
+  });
+
+  closeModal();
+  location.hash = "#/movies";
+}
+</script>
