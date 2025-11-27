@@ -2,7 +2,7 @@ package services
 
 import (
 	"errors"
-	config "movion/Config"
+	// config "movion/Config"
 	models "movion/Models"
 	repositories "movion/Repositories"
 )
@@ -18,9 +18,7 @@ func CreateMovie(inputMovie *models.Movie)(*models.Movie, error){
 	return inputMovie, err
 }
 func GetAllMovies() ([]models.Movie, error) {
-    var movies []models.Movie
-    err := config.DB.Find(&movies).Error
-    return movies, err
+    return repositories.GetAllMovies()
 }
 
 

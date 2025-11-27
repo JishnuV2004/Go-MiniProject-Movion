@@ -13,7 +13,7 @@ import (
 func RegisterRoutes(r *gin.Engine) {
 
     // public page: no middleware
-    r.GET("/home", controllers.GetAllMoviesPage)
+    // r.GET("/home", controllers.GetAllMoviesPage)
 
 
     // public routes
@@ -35,7 +35,7 @@ func RegisterRoutes(r *gin.Engine) {
         admin.POST("/adminlogin", controllers.AdminLogin)
 
         protected := admin.Group("")
-        protected.Use(middleware.RBACmiddleware(constants.Admin))
+        // protected.Use(middleware.RBACmiddleware(constants.Admin))
         {
             // user CRUD
             protected.GET("/users", controllers.GetAllUsers)
@@ -51,12 +51,20 @@ func RegisterRoutes(r *gin.Engine) {
             protected.GET("/getmovie/:id", controllers.GetMovie)
             protected.POST("/editmovie/:id", controllers.EditMovie)
             protected.POST("/deletemovie/:id", controllers.DeleteMovie)
+			protected.GET("/allmovies", controllers.GetAllMovies)
 
             // screen CRUD
             protected.POST("/screen", controllers.CreateScreen)
             protected.GET("/getscreens", controllers.GetAllScreens)
             protected.POST("/editscreen/:id", controllers.EditScreen)
             protected.POST("/deletescreen/:id", controllers.DeleteScreen)
+
+			// show CRUD
+			protected.POST("/createshow", controllers.CreateShow)
+			protected.GET("/getallshows", controllers.GetAllShows)
+			protected.GET("/getshow/:id", controllers.GetShowByID)
+			protected.POST("/editshow/:id", controllers.EditShow)
+			protected.POST("/deleteshow/:id", controllers.DeleteShow)
         }
     }
 }

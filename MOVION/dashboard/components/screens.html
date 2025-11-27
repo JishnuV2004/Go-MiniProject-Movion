@@ -1,88 +1,243 @@
-<div class="bg-white p-6 rounded shadow">Loading screens...</div>
+<!-- SCREENS PAGE -->
+<!-- <h1 class="text-2xl font-semibold mb-6">Screens</h1> -->
+
+<div id="appContent"></div>
+<div id="modals"></div>
+
+<style>
+@keyframes scaleIn {
+  0% { transform: scale(.96); opacity: 0 }
+  100% { transform: scale(1); opacity: 1 }
+}
+.animate-scaleIn { animation: scaleIn .18s ease-out; }
+</style>
 
 <script>
-(async function loadScreens() {
-  const app = document.querySelector("#appContent");
+
+// ========== RENDER SCREENS ==========
+async function renderScreens() {
+  const app = document.getElementById("appContent");
+
+  app.innerHTML = `
+    <div class="bg-white p-6 rounded shadow">
+      <div class="animate-pulse text-slate-500">Loading screens...</div>
+    </div>
+  `;
 
   try {
-    const res = await fetch(`${API}/getscreens`, { headers: authHeaders() });
+    const res = await fetch(`${API_BASE}/getscreens`, { method:"GET" });
+    if (!res.ok) throw new Error("Failed to fetch screens");
+
     const data = await res.json();
-    const screens = data.screens;
+    const screens = data.screens || [];
 
     const rows = screens.map(s => `
-      <tr class="border-t">
-        <td class="px-3 py-2">${s.ID}</td>
-        <td class="px-3 py-2">${s.name}</td>
-        <td class="px-3 py-2">${s.totalseats}</td>
-        <td class="px-3 py-2">
-          <button class="edit-screen text-indigo-600" data-id="${s.ID}">Edit</button>
-          <button class="delete-screen text-red-600 ml-2" data-id="${s.ID}">Delete</button>
+      <tr class="border-t hover:bg-slate-50 transition">
+        <td class="px-4 py-3 font-medium">${s.ID}</td>
+        <td class="px-4 py-3">${escapeHtml(s.name)}</td>
+        <td class="px-4 py-3">${s.totalseats}</td>
+        <td class="px-4 py-3">
+          <button data-id="${s.ID}" class="edit-screen text-indigo-600 hover:underline mr-3">Edit</button>
+          <button data-id="${s.ID}" class="del-screen text-red-600 hover:underline">Delete</button>
         </td>
       </tr>
     `).join("");
 
     app.innerHTML = `
-      <div class="bg-white p-4 rounded shadow">
-        <div class="flex items-center justify-between mb-4">
-          <h2 class="font-semibold">Screens</h2>
-          <button id="addScreenBtn" class="bg-indigo-600 text-white px-3 py-1 rounded">Add Screen</button>
+      <div class="bg-white p-6 rounded-lg shadow-sm">
+
+        <div class="flex items-center justify-between mb-6">
+          <div>
+            <h2 class="text-xl font-semibold">All Screens</h2>
+            <p class="text-sm text-slate-500">Manage halls and seating layouts</p>
+          </div>
+
+          <button id="addScreenBtn"
+            class="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg shadow hover:bg-indigo-700 transition">
+            <span class="text-lg leading-none">+</span> Add Screen
+          </button>
         </div>
-        <table class="w-full">
-          <thead>
-            <tr class="text-left text-slate-500">
-              <th class="px-3 py-2">ID</th>
-              <th class="px-3 py-2">Name</th>
-              <th class="px-3 py-2">Seats</th>
-              <th class="px-3 py-2">Actions</th>
-            </tr>
-          </thead>
-          <tbody>${rows}</tbody>
-        </table>
+
+        <div class="overflow-x-auto rounded-lg border border-slate-200">
+          <table class="w-full text-left">
+            <thead class="bg-slate-100 text-slate-600 text-sm">
+              <tr>
+                <th class="px-4 py-3">ID</th>
+                <th class="px-4 py-3">Screen Name</th>
+                <th class="px-4 py-3">Total Seats</th>
+                <th class="px-4 py-3">Actions</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+
       </div>
     `;
 
-    document.querySelectorAll(".edit-screen").forEach(btn =>
-      btn.addEventListener("click", e => openEditScreen(e.target.dataset.id))
-    );
+    // Buttons
+    document.getElementById("addScreenBtn").onclick = () => openScreenModal(null);
 
-    document.querySelectorAll(".delete-screen").forEach(btn =>
-      btn.addEventListener("click", e => deleteScreen(e.target.dataset.id))
-    );
+    document.querySelectorAll(".edit-screen").forEach(btn => {
+      btn.onclick = () => {
+        const id = Number(btn.dataset.id);
+        const item = screens.find(s => s.ID === id);
+        openScreenModal(item);
+      };
+    });
 
-    document.getElementById("addScreenBtn").addEventListener("click", () => openAddScreen());
+    document.querySelectorAll(".del-screen").forEach(btn => {
+      btn.onclick = () => deleteScreen(Number(btn.dataset.id));
+    });
 
   } catch (err) {
-    app.innerHTML = `<div class="p-4 text-red-600 bg-white rounded">Error: ${err.message}</div>`;
-  }
-})();
-
-// Add screen modal
-function openAddScreen() {
-  openModal(`
-    <div class="modal-bg">
-      <div class="modal-box">
-        <h3>Add Screen</h3>
-        <input id="name" placeholder="Screen Name" class="inp" />
-        <input id="seats" type="number" placeholder="Total Seats" class="inp" />
-        <button onclick="saveScreen()" class="btn">Save</button>
+    app.innerHTML = `
+      <div class="bg-white p-6 rounded shadow text-red-600">
+        Error loading screens: ${err.message}
       </div>
-    </div>
-  `);
+    `;
+  }
 }
 
-async function saveScreen() {
+
+// ========== OPEN MODAL (Rows & Columns only) ==========
+function openScreenModal(item) {
+  const isEdit = !!item;
+
+  const name = isEdit ? item.name : "";
+  const rows = isEdit ? item.rows : 10;
+  const cols = isEdit ? item.cols : 10;
+
+  document.getElementById("modals").innerHTML = `
+  <div class="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+    <div class="bg-white p-6 rounded-xl shadow-lg w-full max-w-lg animate-scaleIn">
+
+      <div class="flex justify-between items-center mb-4">
+        <h3 class="text-xl font-semibold">${isEdit ? "Edit Screen" : "Add Screen"}</h3>
+        <button onclick="closeModal()" class="text-slate-500 text-xl hover:text-black">×</button>
+      </div>
+
+      <div class="space-y-4">
+
+        <div>
+          <label class="text-sm font-medium">Screen Name</label>
+          <input id="scr_name"
+            class="mt-1 p-2 w-full border rounded-lg focus:ring-indigo-500 focus:border-indigo-500"
+            value="${name}">
+        </div>
+
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="text-sm font-medium">Rows</label>
+            <input id="scr_rows" type="number" min="1"
+              class="mt-1 p-2 w-full border rounded-lg"
+              value="${rows}">
+          </div>
+
+          <div>
+            <label class="text-sm font-medium">Columns</label>
+            <input id="scr_cols" type="number" min="1"
+              class="mt-1 p-2 w-full border rounded-lg"
+              value="${cols}">
+          </div>
+        </div>
+
+      <p class="text-sm text-slate-500 mt-2">
+        Total Seats will be calculated automatically.
+      </p>
+
+      <div class="flex justify-end gap-3 mt-6">
+        <button onclick="closeModal()" class="px-4 py-2 border rounded-lg">Cancel</button>
+        <button id="saveScreenBtn"
+          class="px-4 py-2 bg-indigo-600 text-white rounded-lg shadow hover:bg-indigo-700">
+          ${isEdit ? "Update" : "Create"}
+        </button>
+      </div>
+
+    </div>
+  </div>
+  `;
+
+  document.getElementById("saveScreenBtn").onclick = () => saveScreen(item);
+}
+
+
+// ========== SAVE SCREEN (Auto total seats) ==========
+async function saveScreen(existing) {
+  const name = document.getElementById("scr_name").value.trim();
+  const rows = Number(document.getElementById("scr_rows").value);
+  const cols = Number(document.getElementById("scr_cols").value);
+
+  if (!name || rows <= 0 || cols <= 0) {
+    alert("Please enter valid name, rows, and columns.");
+    return;
+  }
+
+  const totalSeats = rows * cols;
+
   const payload = {
-    name: document.getElementById("name").value,
-    totalseats: Number(document.getElementById("seats").value)
+    name,
+    rows,
+    cols,
+    totalseats: totalSeats
   };
 
-  await fetch(`${API}/screen`, {
-    method: "POST",
-    headers: authHeaders(),
-    body: JSON.stringify(payload)
-  });
+  try {
+    if (existing) {
+      await fetch(`${API_BASE}/editscreen/${existing.ID}?row=${rows}&col=${cols}`, {
+        method: "POST",
+        body: JSON.stringify(payload)
+      });
+    } else {
+      await fetch(`${API_BASE}/screen?row=${rows}&col=${cols}`, {
+        method: "POST",
+        body: JSON.stringify(payload)
+      });
+    }
 
-  closeModal();
-  location.hash = "#/screens";
+    closeModal();
+    renderScreens();
+
+  } catch (err) {
+    alert("Failed: " + err.message);
+  }
 }
+
+
+// ========== DELETE ==========
+async function deleteScreen(id) {
+  if (!confirm("Delete this screen?")) return;
+
+  try {
+    await fetch(`${API_BASE}/deletescreen/${id}`, {
+      method: "POST"
+    });
+
+    renderScreens();
+
+  } catch (err) {
+    alert("Delete failed: " + err.message);
+  }
+}
+
+
+// ========== CLOSE MODAL ==========
+function closeModal() {
+  document.getElementById("modals").innerHTML = "";
+}
+
+
+// ========== ESCAPE HTML ==========
+function escapeHtml(str) {
+  if (!str) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+
+// AUTO LOAD
+renderScreens();
+
 </script>

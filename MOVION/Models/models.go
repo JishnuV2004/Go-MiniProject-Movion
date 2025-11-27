@@ -74,8 +74,11 @@ type Show struct {
     Price          float64   `json:"price"`
     AvailableSeats int       `json:"available_seats"`
 
-    Movie  Movie  `json:"movie"`
-    Screen Screen `json:"screen"`
+	Movie  Movie  `gorm:"foreignKey:MovieID" json:"movie"`
+    Screen Screen `gorm:"foreignKey:ScreenID" json:"screen"`
+
+    // Movie  Movie  `json:"movie"`
+    // Screen Screen `json:"screen"`
 }
 
 type Booking struct {
@@ -94,6 +97,13 @@ type BookedSeat struct {
     gorm.Model
     ShowID     uint   `json:"show_id"`
     SeatNumber string `json:"seat_number"`
+}
+
+type EditShow struct {
+    MovieID  uint      `json:"movie_id"`
+    ScreenID uint      `json:"screen_id"`
+    ShowTime time.Time `json:"show_time"`
+    Price    float64   `json:"price"`
 }
 
 

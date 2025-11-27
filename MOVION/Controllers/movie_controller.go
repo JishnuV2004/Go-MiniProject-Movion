@@ -1,7 +1,7 @@
 package controllers
 
 import (
-	config "movion/Config"
+	// config "movion/Config"
 	models "movion/Models"
 	services "movion/Services"
 	"net/http"
@@ -31,12 +31,13 @@ func CreateMovie(c *gin.Context){
 	})
 }
 
-func GetAllMoviesPage(c *gin.Context) {
-    var movies []models.Movie
-    config.DB.Find(&movies)
-    c.HTML(200, "home.html", gin.H{
-        "Movies": movies,
-    })
+func GetAllMovies(c *gin.Context) {
+    movies, err := services.GetAllMovies()
+if err != nil {
+c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch movies"})
+return
+}
+c.JSON(http.StatusOK, gin.H{"movies": movies})
 }
 
 

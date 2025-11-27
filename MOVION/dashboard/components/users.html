@@ -1,68 +1,228 @@
-<div class="bg-white p-6 rounded shadow">Loading users...</div>
+<!-- <h1 class="text-2xl font-semibold mb-6">Users</h1> -->
 
-<script type="module">
-(async function loadUsers() {
-  const app = document.querySelector("#appContent");
+<div id="userApp"></div>
+<div id="userModals"></div>
+
+<style>
+@keyframes scaleIn {
+  0% { transform: scale(.96); opacity: 0 }
+  100% { transform: scale(1); opacity: 1 }
+}
+.animate-scaleIn { animation: scaleIn .18s ease-out; }
+</style>
+
+<script>
+// ================== LOAD USERS ==================
+async function loadUsers() {
+  const wrap = document.getElementById("userApp");
+
+  wrap.innerHTML = `
+    <div class="bg-white p-6 rounded shadow">
+      <div class="animate-pulse text-slate-500">Loading users...</div>
+    </div>
+  `;
 
   try {
-    const res = await fetch(window.API + "/users", {
-      method: "GET",
-      headers: window.authHeaders(),
-      credentials: "include"
-    });
-
-    if (!res.ok) throw new Error("Unauthorized or Failed to load users");
-
+    const res = await fetch(`${API_BASE}/users`);
     const data = await res.json();
     const users = data.users || [];
 
+    window.lastUsers = users;
+
     const rows = users.map(u => `
-      <tr class="border-t">
-        <td class="px-3 py-2">${u.ID}</td>
-        <td class="px-3 py-2">${u.username}</td>
-        <td class="px-3 py-2">${u.email}</td>
-        <td class="px-3 py-2">${u.role}</td>
-        <td class="px-3 py-2">
-          <button data-id="${u.ID}" class="del text-red-600">Delete</button>
+      <tr class="border-t hover:bg-slate-50">
+        <td class="px-4 py-3">${u.ID}</td>
+        <td class="px-4 py-3">${escape(u.username)}</td>
+        <td class="px-4 py-3">${escape(u.email)}</td>
+
+        <td class="px-4 py-3">
+          ${u.is_blocked
+            ? `<span class="text-red-600 font-medium">Blocked</span>`
+            : `<span class="text-green-600 font-medium">Active</span>`}
+        </td>
+
+        <td class="px-4 py-3 flex gap-3">
+          <button class="text-indigo-600 hover:underline" onclick="openUserModal(${u.ID})">Edit</button>
+
+          ${
+            u.is_blocked
+              ? `<button class="text-green-600 hover:underline" onclick="unblockUser(${u.ID})">Unblock</button>`
+              : `<button class="text-orange-600 hover:underline" onclick="blockUser(${u.ID})">Block</button>`
+          }
+
+          <button class="text-red-600 hover:underline" onclick="deleteUser(${u.ID})">Delete</button>
         </td>
       </tr>
     `).join("");
 
-    app.innerHTML = `
-      <div class="bg-white p-4 rounded shadow">
-        <div class="flex items-center justify-between mb-4">
-          <h2 class="font-semibold">Users</h2>
+    wrap.innerHTML = `
+      <div class="bg-white p-6 rounded-lg shadow-sm">
+
+        <div class="flex items-center justify-between mb-6">
+          <div>
+            <h2 class="text-xl font-semibold">All Users</h2>
+            <p class="text-sm text-slate-500">Manage registered users</p>
+          </div>
+
+          <button id="addUserBtn"
+            class="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">
+            <span class="text-lg leading-none">+</span> Add User
+          </button>
         </div>
 
-        <table class="w-full">
-          <thead>
-            <tr class="text-left text-slate-500">
-              <th class="px-3 py-2">ID</th>
-              <th class="px-3 py-2">Username</th>
-              <th class="px-3 py-2">Email</th>
-              <th class="px-3 py-2">Role</th>
-              <th class="px-3 py-2">Actions</th>
-            </tr>
-          </thead>
-          <tbody>${rows}</tbody>
-        </table>
+        <div class="overflow-x-auto border border-slate-200 rounded-lg">
+          <table class="w-full text-left">
+            <thead class="text-slate-500 bg-slate-100 text-sm">
+              <tr>
+                <th class="px-4 py-2">ID</th>
+                <th class="px-4 py-2">Name</th>
+                <th class="px-4 py-2">Email</th>
+                <th class="px-4 py-2">Status</th>
+                <th class="px-4 py-2">Actions</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+
       </div>
     `;
 
-    // delete handler
-    document.querySelectorAll(".del").forEach(btn =>
-      btn.addEventListener("click", async (e) => {
-        const id = e.target.dataset.id;
-        await fetch(window.API + "/delete/" + id, {
-          method: "POST",
-          headers: window.authHeaders(),
-        });
-        location.hash = "#/users"; // reload
-      })
-    );
+    document.getElementById("addUserBtn").onclick = () => openUserModal(null);
 
   } catch (err) {
-    app.innerHTML = `<div class="p-4 text-red-600 bg-white rounded">${err.message}</div>`;
+    wrap.innerHTML = `<div class="text-red-600 p-4">Error: ${err.message}</div>`;
   }
-})();
+}
+
+// ============= OPEN MODAL (ADD / EDIT) =============
+function openUserModal(id) {
+  const item = id ? lastUsers.find(u => u.ID === id) : null;
+  const isEdit = !!item;
+
+  const name = item ? escape(item.username) : "";
+  const email = item ? escape(item.email) : "";
+
+  document.getElementById("userModals").innerHTML = `
+    <div class="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+      <div class="bg-white p-6 rounded-xl shadow-lg w-full max-w-lg animate-scaleIn">
+
+        <div class="flex justify-between items-center mb-4">
+          <h3 class="text-xl font-semibold">${isEdit ? "Edit User" : "Add User"}</h3>
+          <button onclick="closeUserModal()" class="text-slate-500 text-xl hover:text-black">×</button>
+        </div>
+
+        <div class="space-y-4">
+          <div>
+            <label class="text-sm font-medium">Name</label>
+            <input id="usr_name"
+              class="mt-1 p-2 w-full border rounded-lg"
+              value="${name}">
+          </div>
+
+          <div>
+            <label class="text-sm font-medium">Email</label>
+            <input id="usr_email" type="email"
+              class="mt-1 p-2 w-full border rounded-lg"
+              value="${email}">
+          </div>
+        </div>
+
+        <div class="flex justify-end gap-3 mt-6">
+          <button onclick="closeUserModal()" class="px-4 py-2 border rounded-lg">Cancel</button>
+          <button onclick="saveUser(${id ?? "null"})"
+            class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">
+            ${isEdit ? "Update" : "Create"}
+          </button>
+        </div>
+
+      </div>
+    </div>
+  `;
+}
+
+function closeUserModal() {
+  document.getElementById("userModals").innerHTML = "";
+}
+
+// ================== SAVE USER ==================
+async function saveUser(id) {
+  const name = document.getElementById("usr_name").value.trim();
+  const email = document.getElementById("usr_email").value.trim();
+
+  if (!name || !email) {
+    alert("Please fill all fields");
+    return;
+  }
+
+  const payload = { username: name, email };
+
+  try {
+    if (id) {
+      await fetch(`${API_BASE}/edit/${id}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+    } else {
+      await fetch(`${API_BASE}/create`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+    }
+
+    closeUserModal();
+    loadUsers();
+
+  } catch (err) {
+    alert("Error: " + err.message);
+  }
+}
+
+// ================== BLOCK USER ==================
+async function blockUser(id) {
+  if (!confirm("Block this user?")) return;
+
+  await fetch(`${API_BASE}/block/${id}/block?block=true`, {
+    method: "POST"
+  });
+
+  loadUsers();
+}
+
+// ================== UNBLOCK USER ==================
+async function unblockUser(id) {
+  if (!confirm("Unblock this user?")) return;
+
+  await fetch(`${API_BASE}/block/${id}/block?block=false`, {
+    method: "POST"
+  });
+
+  loadUsers();
+}
+
+// ================== DELETE USER ==================
+async function deleteUser(id) {
+  if (!confirm("Delete this user?")) return;
+
+  await fetch(`${API_BASE}/delete/${id}`, {
+    method: "POST"
+  });
+
+  loadUsers();
+}
+
+// Escape HTML
+function escape(str) {
+  return String(str || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+// Load initially
+loadUsers();
+
 </script>
+

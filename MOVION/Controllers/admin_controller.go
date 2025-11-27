@@ -9,27 +9,28 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func AdminLogin(c *gin.Context){
+func AdminLogin(c *gin.Context) {
 	var adminlogin models.Admin
 	if err := c.ShouldBindJSON(&adminlogin); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
-			"error":"invalid request",
-			"err":err.Error(),
+			"error": "invalid request",
+			"err":   err.Error(),
 		})
 		return
 	}
 	admin, err := services.AdminLogin(adminlogin.Email, adminlogin.Password)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{
-			"error":"user not found",
-			"err": err.Error(),
+			"error": "user not found",
+			"err":   err.Error(),
 		})
 	}
 	c.JSON(http.StatusOK, gin.H{
-		"admin": admin.Email,
-		"message":"login successful",
+		"admin":   admin.Email,
+		"message": "login successful",
 	})
 }
+
 // Get all users
 func GetAllUsers(c *gin.Context) {
 
@@ -48,20 +49,10 @@ func GetAllUsers(c *gin.Context) {
 	users, err := services.GetAllUsers(page, limit)
 
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "users not found",
-		})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch users"})
 		return
 	}
-
-	c.HTML(http.StatusOK, "layout.html", gin.H{
-    "PageTitle": "Users",
-    "Users": users,
-})
-
-	c.JSON(http.StatusOK, gin.H{
-		"users": users,
-	})
+	c.JSON(http.StatusOK, gin.H{"users": users})
 }
 
 // Get user
