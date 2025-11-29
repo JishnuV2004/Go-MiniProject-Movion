@@ -1,15 +1,142 @@
-<!-- <h1 class="text-2xl font-bold mb-4">Shows</h1> -->
+<!-- <h1 class="text-2xl font-bold mb-6">Shows</h1> -->
 
-<div id="showList"></div>
+<div class="flex justify-end mb-4">
+  <button onclick="openShowModal()" 
+    class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">
+    + Add Show
+  </button>
+</div>
+
+<div id="showList" class="space-y-3"></div>
+
+<div id="showModals"></div>
 
 <script>
 async function loadShows() {
-  const data = await fetch(`${API_BASE}/shows`).then(r => r.json());
-  document.getElementById("showList").innerHTML = data.map(s => `
-    <div class="bg-white p-4 shadow rounded mb-3">
-      <strong>${s.movieName}</strong> — ${s.time}
+  const wrap = document.getElementById("showList");
+
+  wrap.innerHTML = `
+    <div class="p-4 bg-white shadow rounded animate-pulse text-slate-500">
+      Loading shows...
     </div>
-  `).join("");
+  `;
+
+  try {
+    const res = await fetch(`${API_BASE}/getallshows`);
+    const data = await res.json();
+
+    if (!data || data.length === 0) {
+      wrap.innerHTML = `<div class="p-4 bg-white rounded shadow">No shows found.</div>`;
+      return;
+    }
+    // console.log(data)
+    let shows = data.shows || [];
+    window.lastShows = shows;
+
+    wrap.innerHTML = shows.map(s => `
+      <div class="bg-white p-4 shadow rounded-lg border">
+        <div class="flex justify-between items-center">
+          <div>
+            <div class="text-lg font-semibold">${s.movie.title}</div>
+            <div class="text-sm text-slate-600">
+              Screen: <strong>${s.screen.name}</strong>
+            </div>
+            <div class="text-sm">Time: ${new Date(s.show_time).toLocaleString()}</div>
+            <div class="text-sm">Price: ₹${s.price}</div>
+            <div class="text-sm text-green-700">Available Seats: ${s.available_seats}</div>
+          </div>
+
+          <div class="flex gap-3">
+            <button onclick="openShowModal(${s.ID})" class="text-indigo-600 hover:underline">Edit</button>
+            <button onclick="deleteShow(${s.ID})" class="text-red-600 hover:underline">Delete</button>
+          </div>
+        </div>
+      </div>
+    `).join("");
+
+  } catch (err) {
+    wrap.innerHTML = `<div class="text-red-600 p-4 bg-white shadow rounded">Error: ${err.message}</div>`;
+  }
+}
+
+function openShowModal(id = null) {
+  const show = id ? lastShows.find(x => x.ID === id) : null;
+
+  document.getElementById("showModals").innerHTML = `
+    <div class="fixed inset-0 bg-black/40 flex items-center justify-center p-4">
+      <div class="bg-white p-6 rounded-xl shadow-lg w-full max-w-lg">
+        <div class="flex justify-between mb-4">
+          <h2 class="text-xl font-semibold">${id ? "Edit Show" : "Add Show"}</h2>
+          <button onclick="closeShowModal()" class="text-xl">&times;</button>
+        </div>
+
+        <div class="space-y-4">
+          <div>
+            <label class="block text-sm">Movie ID</label>
+            <input id="show_movie" class="p-2 w-full border rounded" value="${show ? show.movie_id : ""}">
+          </div>
+
+          <div>
+            <label class="block text-sm">Screen ID</label>
+            <input id="show_screen" class="p-2 w-full border rounded" value="${show ? show.screen_id : ""}">
+          </div>
+
+          <div>
+            <label class="block text-sm">Show Time</label>
+            <input id="show_time" type="datetime-local" class="p-2 w-full border rounded"
+              value="${show ? show.show_time.replace('Z','').slice(0,16) : ""}">
+          </div>
+
+          <div>
+            <label class="block text-sm">Price</label>
+            <input id="show_price" class="p-2 w-full border rounded" value="${show ? show.price : ""}">
+          </div>
+        </div>
+
+        <div class="flex justify-end gap-3 mt-6">
+          <button onclick="closeShowModal()" class="px-4 py-2 border rounded">Cancel</button>
+          <button onclick="saveShow(${id ?? "null"})"
+            class="px-4 py-2 bg-indigo-600 text-white rounded">Save</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function closeShowModal() {
+  document.getElementById("showModals").innerHTML = "";
+}
+
+async function saveShow(id) {
+  const body = {
+    movie_id: Number(document.getElementById("show_movie").value),
+    screen_id: Number(document.getElementById("show_screen").value),
+    show_time: new Date(document.getElementById("show_time").value).toISOString(),
+    price: Number(document.getElementById("show_price").value)
+  };
+
+  const url = id 
+    ? `${API_BASE}/editshow/${id}`
+    : `${API_BASE}/createshow`;
+
+  await fetch(url, {
+    method: "POST",
+    // headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  });
+
+  closeShowModal();
+  loadShows();
+}
+
+async function deleteShow(id) {
+  if (!confirm("Delete this show?")) return;
+
+  await fetch(`${API_BASE}/deleteshow/${id}`, {
+    method: "POST"
+  });
+
+  loadShows();
 }
 
 loadShows();

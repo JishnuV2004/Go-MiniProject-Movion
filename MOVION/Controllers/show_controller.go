@@ -61,7 +61,9 @@ if err != nil {
 c.JSON(http.StatusNotFound, gin.H{"error": "show not found"})
 return
 }
-c.JSON(http.StatusOK, gin.H{"show": show})
+c.JSON(http.StatusOK, gin.H{
+	"show": show,
+})
 }
 
 func GetAllShows(c *gin.Context){

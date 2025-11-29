@@ -28,16 +28,17 @@
 (async () => {
   const userdata = await fetch(`${API_BASE}/users`).then(r => r.json());
   const moviesdata = await fetch(`${API_BASE}/allmovies`).then(r => r.json());
-  // const shows = await fetch(`${API_BASE}/getshows`).then(r => r.json());
+  const showsdata = await fetch(`${API_BASE}/getallshows`).then(r => r.json());
   const screensdata = await fetch(`${API_BASE}/getscreens`).then(r => r.json());
   
   const users = userdata.users || [];
   const movies = moviesdata.movies || [];
   const screens = screensdata.screens || [];
+  const shows = showsdata.shows || [];
 
   document.getElementById("dUsers").textContent = users.length;
   document.getElementById("dMovies").textContent = movies.length;
-  // document.getElementById("dShows").textContent = shows.length;
+  document.getElementById("dShows").textContent = shows.length;
   document.getElementById("dScreens").textContent = screens.length;
 })();
 </script>

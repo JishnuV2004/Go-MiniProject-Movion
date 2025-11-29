@@ -58,7 +58,7 @@ type Screen struct {
     Name       string     `json:"name"`
     TotalSeats int        `json:"totalseats"`
     Seats      []Seat     `json:"seats" gorm:"constraint:OnDelete:CASCADE;"`
-    Shows      []Show     `json:"shows"`
+    // Shows      []Show     `json:"shows"`
 }
 type Seat struct {
     gorm.Model
@@ -89,6 +89,7 @@ type Booking struct {
     TotalSeatsBooked int       `json:"total_seats_booked"`
     Amount           float64   `json:"amount"`
     Status           string    `json:"status" gorm:"default:'booked'"`
+	CreatedAt        time.Time
 
     User User `json:"user"`
     Show Show `json:"show"`

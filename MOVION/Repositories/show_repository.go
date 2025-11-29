@@ -38,7 +38,7 @@ func LoadShowRelations(show *models.Show) (*models.Show, error) {
 
 func GetShowByIdWithPreload(id uint) (*models.Show, error) {
 	var show models.Show
-	err := config.DB.Preload("Movie").Preload("Screen").First(&show, id).Error
+	err := config.DB.Preload("Movie").Preload("Screen").Preload("Screen.Seats").First(&show, id).Error
 	// err := config.DB.First(&show, id).Error
 	return &show, err
 }

@@ -26,6 +26,10 @@ func RegisterRoutes(r *gin.Engine) {
     {
         api.GET("/profile", controllers.Profile)
         api.POST("/update", controllers.UpdateUser)
+		api.GET("/getallshows", controllers.GetAllShows)
+		api.GET("/getshow/:id", controllers.GetShowByID)
+		api.POST("/createbooking", controllers.CreateBooking)
+		api.POST("/cancelbooking/:id", controllers.CancelBooking)
         api.POST("/logout", controllers.Logout)
     }
 
@@ -56,6 +60,7 @@ func RegisterRoutes(r *gin.Engine) {
             // screen CRUD
             protected.POST("/screen", controllers.CreateScreen)
             protected.GET("/getscreens", controllers.GetAllScreens)
+			protected.GET("/getscreen/:id", controllers.GetScreen)
             protected.POST("/editscreen/:id", controllers.EditScreen)
             protected.POST("/deletescreen/:id", controllers.DeleteScreen)
 
