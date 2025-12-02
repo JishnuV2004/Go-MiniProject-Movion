@@ -3,19 +3,30 @@ package config
 import (
 	"log"
 	models "movion/Models"
+	"os"
 
+	"github.com/joho/godotenv"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 )
 
-var Jwtkey = []byte("secretkey")
+var Jwtkey []byte
 
 var DB *gorm.DB
 
 func InitDB(){
-	dsn := "root:jishnu2004@tcp(127.0.0.1:3306)/movion?charset=utf8mb4&parseTime=True&loc=Local"
-	var err error
-	DB, err = gorm.Open(mysql.Open(dsn), &gorm.Config{})
+
+	err := godotenv.Load()
+	if err != nil {
+		log.Println("env file not found, using system environment variables")
+	}
+
+	root := os.Getenv("DB_ROOT")
+	jwtscret := os.Getenv("JWT_SECRET")
+	Jwtkey = []byte(jwtscret)
+
+	// var err error
+	DB, err = gorm.Open(mysql.Open(root), &gorm.Config{})
 	if err != nil {
 		panic("database connection failed")
 	}
